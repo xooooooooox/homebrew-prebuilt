@@ -38,9 +38,11 @@ Formula names match homebrew-core (they shadow it, like the patched tap does).
 
 ## Bumping
 
-Manual for now: update `version`, the two asset `url`s and `sha256`s (from the
-release's `checksums.txt`). `brew livecheck --tap xooooooooox/prebuilt`
-reports when upstream ships a newer release.
+Owned by Actions: a weekly schedule livechecks the tap and opens one PR per
+outdated formula (new asset urls + sha256s computed by downloading each
+asset); merge to accept. GitHub -> Actions -> "bump" -> Run workflow bumps a
+single formula on demand (optional version override).
+`brew livecheck --tap xooooooooox/prebuilt` works locally too.
 
 ## Adding a tool
 

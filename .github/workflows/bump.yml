@@ -1,0 +1,111 @@
+# Bump prebuilt formulas to new upstream releases. Manual dispatch bumps one
+# formula; the weekly schedule livechecks the whole tap and opens one PR per
+# outdated formula. Humans merge; ci.yml re-verifies every PR.
+name: bump
+
+on:
+  workflow_dispatch:
+    inputs:
+      formula:
+        description: "Formula name (e.g. leaf-markdown-viewer)"
+        type: string
+        required: true
+      version:
+        description: "Version override (default: newest upstream release)"
+        type: string
+        required: false
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  plan:
+    runs-on: macos-latest
+    outputs:
+      formulas: ${{ steps.list.outputs.formulas }}
+    steps:
+      - name: Set up Homebrew (places this tap checkout in the tap location)
+        uses: Homebrew/actions/setup-homebrew@main
+
+      - name: List formulas to bump
+        id: list
+        env:
+          DISPATCH_FORMULA: ${{ inputs.formula }}
+        run: |
+          if [ -n "${DISPATCH_FORMULA:-}" ]; then
+            FORMULAS="[\"${DISPATCH_FORMULA}\"]"
+          else
+            FORMULAS="$(brew livecheck --tap "${GITHUB_REPOSITORY_OWNER}/prebuilt" --json |
+              python3 -c 'import sys,json;print(json.dumps([f["formula"].split("/")[-1] for f in json.load(sys.stdin) if f.get("version",{}).get("outdated")]))')"
+          fi
+          echo "formulas=${FORMULAS}" >> "$GITHUB_OUTPUT"
+          echo "to bump: ${FORMULAS}"
+
+  bump:
+    needs: plan
+    if: ${{ needs.plan.outputs.formulas != '[]' }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        formula: ${{ fromJSON(needs.plan.outputs.formulas) }}
+    env:
+      NAME: ${{ matrix.formula }}
+      WANT_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Set up Homebrew (places this tap checkout in the tap location)
+        uses: Homebrew/actions/setup-homebrew@main
+
+      - name: Locate tap directory
+        id: tap
+        run: |
+          TAP_DIR="$(brew --repository "${GITHUB_REPOSITORY_OWNER}/prebuilt")"
+          [ -d "$TAP_DIR" ] || { echo "error: tap checkout not found" >&2; exit 1; }
+          echo "dir=$TAP_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Bump
+        id: bump
+        working-directory: ${{ steps.tap.outputs.dir }}
+        run: .github/scripts/bump.sh "$NAME" ${WANT_VERSION:+"$WANT_VERSION"}
+
+      - name: Verify
+        if: ${{ steps.bump.outputs.changed == 'true' }}
+        working-directory: ${{ steps.tap.outputs.dir }}
+        run: |
+          {
+            echo "## Bump verification: ${NAME} ${{ steps.bump.outputs.version }}"
+            echo '```'
+            brew style "Formula/${NAME}.rb" 2>&1 | tail -5
+            brew audit --formula "${GITHUB_REPOSITORY_OWNER}/prebuilt/${NAME}" 2>&1 | tail -5 || true
+            brew fetch --formula "${GITHUB_REPOSITORY_OWNER}/prebuilt/${NAME}" 2>&1 | tail -3
+            echo '```'
+          } | tee "$RUNNER_TEMP/report.md"
+
+      # Requires the repo setting "Allow GitHub Actions to create and approve
+      # pull requests" (Settings -> Actions -> General).
+      - name: Create pull request
+        if: ${{ steps.bump.outputs.changed == 'true' }}
+        working-directory: ${{ steps.tap.outputs.dir }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          BRANCH="bump/${NAME}-${VERSION}"
+          if git ls-remote --exit-code origin "refs/heads/${BRANCH}" >/dev/null 2>&1; then
+            echo "branch ${BRANCH} already exists; skipping (idempotent re-run)"
+            exit 0
+          fi
+          git checkout -b "$BRANCH"
+          git add "Formula/${NAME}.rb"
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m "${NAME}: bump to ${VERSION}"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${BRANCH}"
+          gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --head "$BRANCH" \
+            --title "${NAME}: bump to ${VERSION}" \
+            --body-file "$RUNNER_TEMP/report.md"
