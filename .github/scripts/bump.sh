@@ -3,8 +3,10 @@
 # release-asset urls and recompute each asset's sha256 by downloading the
 # asset and hashing it ourselves (never trusting an upstream checksums file).
 # Generic for formulas whose stable urls follow the tap shape:
-# .../releases/download/<version>/<asset>, each url line immediately
-# followed by its sha256 line.
+# .../releases/download/<tag>/<asset>, each url line immediately followed by
+# its sha256 line. The version may appear v-prefixed in the tag and repeated
+# inside the asset name (e.g. .../download/v1.0.12/vfox_1.0.12_...), so the
+# rewrite replaces every occurrence of the version on each url line.
 #
 # Usage: .github/scripts/bump.sh <formula> [<version>]
 #   Without <version>: brew livecheck decides the newest upstream release.
@@ -55,11 +57,15 @@ NEW_URLS="$(python3 - <<'PY'
 import os, re
 path = os.environ["FILE"]
 cur, new = os.environ["CURRENT"], os.environ["LATEST"]
-text = open(path).read()
-old_seg, new_seg = f"/releases/download/{cur}/", f"/releases/download/{new}/"
-if old_seg not in text:
-    raise SystemExit(f"no url with {old_seg} found in {path}")
-text = text.replace(old_seg, new_seg)
+lines = open(path).read().splitlines(keepends=True)
+changed = 0
+for i, line in enumerate(lines):
+    if re.search(r'url "[^"]*/releases/download/[^"]*"', line) and cur in line:
+        lines[i] = line.replace(cur, new)
+        changed += 1
+if not changed:
+    raise SystemExit(f"no release-asset url containing {cur} found in {path}")
+text = "".join(lines)
 open(path, "w").write(text)
 for m in re.finditer(r'url "([^"]+/releases/download/[^"]+)"', text):
     print(m.group(1))
