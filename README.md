@@ -35,6 +35,7 @@ Formula names match homebrew-core (they shadow it, like the patched tap does).
 | Tool | Upstream binaries | Why here |
 |------|-------------------|----------|
 | [leaf-markdown-viewer](https://github.com/RivoLink/leaf) | `leaf-macos-{x86_64,arm64}` release assets | entered core 2026-05 — no monterey bottle ever existed; source build needs rust |
+| [vfox](https://github.com/version-fox/vfox) | `vfox_<ver>_macos_{x86_64,aarch64}.tar.gz` release assets | patched-tap formula retired 2026-09 (PATH-order fix merged upstream in v1.0.12); core has no monterey bottle and a source build needs go |
 
 ## Bumping
 
