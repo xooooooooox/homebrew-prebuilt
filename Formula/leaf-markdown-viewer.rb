@@ -10,12 +10,12 @@ class LeafMarkdownViewer < Formula
 
   on_macos do
     on_intel do
-      url "https://github.com/RivoLink/leaf/releases/download/1.28.1/leaf-macos-x86_64"
-      sha256 "ca2b34a304c73a9f9bc71ddbf1056388c8334b064db24f37076c45a33fa37ccd"
+      url "https://github.com/RivoLink/leaf/releases/download/1.28.2/leaf-macos-x86_64"
+      sha256 "357e28c2d9cab67d2ea4c0232f5afd43835981536e16dbd57fc2646f45509a03"
     end
     on_arm do
-      url "https://github.com/RivoLink/leaf/releases/download/1.28.1/leaf-macos-arm64"
-      sha256 "90b1906d670c580b1552d5701226b09d9e5d608b1341acf6ec921f44830d3015"
+      url "https://github.com/RivoLink/leaf/releases/download/1.28.2/leaf-macos-arm64"
+      sha256 "db409c712c608e4783073ff12ea6a5417bffd20360b03d7450f0f5bb863aa825"
     end
   end
 
